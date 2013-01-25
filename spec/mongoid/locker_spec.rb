@@ -1,15 +1,30 @@
 #encoding: utf-8
 require "spec_helper"
 
+class Doc
+  include Mongoid::Document
+  include Mongoid::Locker
+  
+  field :title, type: String
+  
+  enable_locking_with :locked_at
+  
+  self.timeout = 1
+  
+end
+
 module Mongoid
   describe Locker do
 
     describe 'state machine' do
-      
+      subject { Doc.create title: "Tale of Two Plugins" }
+      [:lock, :unlock, :relock, :locked?, :unlocked?, :locked_at].each do |meth|
+        it { should respond_to meth}
+      end
+      specify { subject.locked_at.should be_nil}
+            
       describe ':lock' do
-        subject { ::Document.create title: "Tale of Two Plugins", state: :unlocked }
-        it { should be_unlocked }
-        specify { subject.locked_at.should be_nil}
+        subject { Doc.create title: "Tale of Two Plugins" }
  
         it "should become locked if it's lockable" do
           subject.lock
@@ -21,10 +36,10 @@ module Mongoid
           subject.locked_at.should_not be_nil
         end
         
-        it "should not be timed_out" do
-          subject.class.stub(:timeout).and_return 30
+        it "should not be timed out" do
+          subject.class.stubs(:timeout).returns 30
           subject.lock
-          subject.can_relock?.should be_false
+          subject.timed_out?.should be_false
         end
           
         it "raises an exception if it's already locked" do
@@ -33,15 +48,15 @@ module Mongoid
         end
 
         it "allows a new lock if it's timed out" do
-          subject.class.stub(:timeout).and_return 1
+          subject.class.stubs(:timeout).returns 1
           subject.lock
           sleep(5)
-          subject.can_relock?.should be_true
+          subject.timed_out?.should be_true
         end
       end
       
       describe ':unlock' do
-        subject { ::Document.create title: "Tale of Two Plugins" }
+        subject { Doc.create title: "Tale of Two Plugins" }
         it "should become unlocked when I unlock it" do
           subject.lock
           subject.unlock
